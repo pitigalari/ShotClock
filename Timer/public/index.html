@@ -95,7 +95,7 @@
                 return;
             
             const cId = "ifs-web-" + new Date().getTime();
-            mqttClient = new Paho.MQTT.Client("broker.hivemq.coms", 8884, cId);
+            mqttClient = new Paho.MQTT.Client("broker.hivemq.com", 8884, cId);
             mqttClient.onConnectionLost = onConnectionLost;
             mqttClient.onMessageArrived = onMessageArrived;
             console.log("MQTT CLIENT: " + cId);
