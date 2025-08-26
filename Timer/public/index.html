@@ -6,8 +6,9 @@
     <style>
         body {
             text-align: center;
-            background-image: url('./bg.png');
-            background-size: cover;
+            background-image: url('./bg.JPG');
+            background-size: contain;
+            margin: 0;
         }
 
         .container {
@@ -25,18 +26,40 @@
             color: white;
             font-size: 30em;
             font-size: 30vi;
-            font-family: Arial, Helvetica, sans-serif;;
+            font-family: Arial, Helvetica, sans-serif;
+        }
+
+        .dot {
+            height: 15px;
+            width: 15px;
+            background-color: #BBB;
+            border-radius: 50%;
+            position: fixed;
+            top: 10px;
+            left: 10px;
         }
     </style>
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.js" type="text/javascript"></script>
     <script>
-        var params = window.location.hash.substring(1)?.split('&');
+        const STATUS = {
+            UNKNOWN: -1,
+            DISCONNECTED: 0,
+            CONNECTING: 1,
+            CONNECTED: 2,
+            ERROR: 3,
+            MSG_RECEIVED: 4
+        }
+
+        var lastKnownStatus = STATUS.UNKNOWN;
+
+        var params = window.location.hash.substring(1)?.split('&'); // #t=&pin=
         var pTime = 0, pPin = null;
         var timeLabel;
         var mqttClient;
         var timer;
-        
+        var statusDot;
+
         window.addEventListener('load', function () {
             params.forEach(param => {
                 var value = param.split('=');
@@ -53,6 +76,7 @@
             
             timeLabel = document.getElementById('timeLbl');
             timeLabel.innerHTML = pTime;
+            statusDot = document.getElementById('status');
 
             acquireWakeLock();
             setupMQTT();
@@ -71,7 +95,7 @@
                 return;
             
             const cId = "ifs-web-" + new Date().getTime();
-            mqttClient = new Paho.MQTT.Client("broker.hivemq.com", 8884, cId);
+            mqttClient = new Paho.MQTT.Client("broker.hivemq.coms", 8884, cId);
             mqttClient.onConnectionLost = onConnectionLost;
             mqttClient.onMessageArrived = onMessageArrived;
             console.log("MQTT CLIENT: " + cId);
@@ -81,7 +105,8 @@
 
         function connect(p = "CONNECTING"){
             console.log("MQTT " + p + "...");
-            mqttClient.connect({onSuccess:onConnect, useSSL:true});
+            onStatusChanged(STATUS.CONNECTING);
+            mqttClient.connect({onSuccess:onConnect, onFailure: onFailure, useSSL:true});
         }
         
         function onConnect() {
@@ -89,11 +114,18 @@
             var topic = "3f191e8fbbe6aff775b68c5f538d9c5c/"+pPin;
             mqttClient.subscribe(topic);
             console.log('MQTT SUBSCRIBED -> T: ' + topic);
+            onStatusChanged(STATUS.CONNECTED);
+        }
+
+        function onFailure(e) {
+            onStatusChanged(STATUS.ERROR);
+            console.log('MQTT ERROR: ' + e.errorMessage);
         }
 
         function onConnectionLost(responseObject) {
             if (responseObject.errorCode !== 0) {
                 console.error("MQTT DISCONNECTED: "+responseObject.errorMessage);
+                onStatusChanged(STATUS.ERROR);
             }
             connect("RECONNECTING");
         }
@@ -103,6 +135,7 @@
                 return;
             var payload = message.payloadString;
             console.log("MQTT -> " + payload);
+            onStatusChanged(STATUS.MSG_RECEIVED);
             
             switch (payload){
                 case "start":
@@ -145,10 +178,37 @@
             clearInterval(timer);
             timer = null;
         }
+
+        function onStatusChanged(status) {
+            lastKnownStatus = status;
+
+            switch (status) {
+                case STATUS.CONNECTING:
+                    statusDot.style.backgroundColor = "#FFA500"; // Orange
+                    break;
+                case STATUS.CONNECTED:
+                    statusDot.style.backgroundColor = "#00FF00"; // Green
+                    break;
+                case STATUS.ERROR:
+                    statusDot.style.backgroundColor = "#FF0000"; // Red
+                    break;
+                case STATUS.MSG_RECEIVED:
+                    statusDot.style.backgroundColor = "#00B3FF"; // light Blue
+                    setTimeout(() => {
+                        if(lastKnownStatus === STATUS.MSG_RECEIVED)
+                            onStatusChanged(STATUS.CONNECTED);
+                    }, 1000);
+                    break;
+                default:
+                    statusDot.style.backgroundColor = "#BBBBBB"; // Grey
+                    break;
+            }
+        }
     </script>
 </head>
 <body>
     <div class="container">
+        <span class="dot" id="status"></span>
         <h1 id="timeLbl">?</h1>
     </div>
 </body>
